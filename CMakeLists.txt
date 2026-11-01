@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.22)
+project(MUKASHI_ALL VERSION 1.0.0)
+add_subdirectory(JUCE)
+add_subdirectory(MUKASHI_HUB_16tracks)
+add_subdirectory(MUKASHI_SOURCE)
