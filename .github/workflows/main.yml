@@ -1,0 +1,60 @@
+name: Build MUKASHI Space VST3 (Windows)
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone JUCE 8.0.6
+        run: git clone --branch 8.0.6 --depth 1 https://github.com/juce-framework/JUCE.git
+
+      - name: Create CMakeLists
+        shell: pwsh
+        run: |
+          @'
+          cmake_minimum_required(VERSION 3.22)
+          project(MUKASHI_ALL VERSION 1.0.0)
+          add_subdirectory(JUCE)
+          if(EXISTS "${CMAKE_SOURCE_DIR}/MUKASHI_HUB_16tracks")
+            add_subdirectory(MUKASHI_HUB_16tracks)
+            add_subdirectory(MUKASHI_SOURCE)
+          else()
+            add_subdirectory(MUKASHI_GitHub_AutoBuild/MUKASHI_HUB_16tracks)
+            add_subdirectory(MUKASHI_GitHub_AutoBuild/MUKASHI_SOURCE)
+          endif()
+          '@ | Set-Content -Path "CMakeLists.txt"
+
+          $hub = 'juce_add_plugin(MUKASHI_HUB VERSION "1.0.0" COMPANY_NAME "MUKASHI" PLUGIN_MANUFACTURERS_CODE Muka PLUGIN_CODE Mhub FORMATS VST3 PRODUCT_NAME "MUKASHI Space HUB (16)")' + "`n" + 'target_sources(MUKASHI_HUB PRIVATE HubProcessor.cpp)' + "`n" + 'target_link_libraries(MUKASHI_HUB PRIVATE juce::juce_audio_utils juce::juce_dsp)'
+          $src = 'juce_add_plugin(MUKASHI_SOURCE VERSION "1.0.0" COMPANY_NAME "MUKASHI" PLUGIN_MANUFACTURERS_CODE Muka PLUGIN_CODE Msrc FORMATS VST3 PRODUCT_NAME "MUKASHI Space SOURCE")' + "`n" + 'target_sources(MUKASHI_SOURCE PRIVATE SpaceProcessor.cpp)' + "`n" + 'target_link_libraries(MUKASHI_SOURCE PRIVATE juce::juce_audio_utils juce::juce_dsp)'
+
+          if (Test-Path "MUKASHI_HUB_16tracks") {
+            Set-Content -Path "MUKASHI_HUB_16tracks/CMakeLists.txt" -Value $hub
+            Set-Content -Path "MUKASHI_SOURCE/CMakeLists.txt" -Value $src
+          } else {
+            Set-Content -Path "MUKASHI_GitHub_AutoBuild/MUKASHI_HUB_16tracks/CMakeLists.txt" -Value $hub
+            Set-Content -Path "MUKASHI_GitHub_AutoBuild/MUKASHI_SOURCE/CMakeLists.txt" -Value $src
+          }
+
+      - name: Build
+        shell: cmd
+        run: |
+          cmake -B build -S .
+          cmake --build build --config Release
+
+      - name: Collect VST3
+        shell: cmd
+        run: |
+          mkdir dist
+          xcopy /S /Y build\*.vst3 dist\ /I
+          dir dist /s
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: MUKASHI-Space-VST3
+          path: dist/
